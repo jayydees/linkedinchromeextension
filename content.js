@@ -9,11 +9,18 @@ let isInitialized = false;
 // Inject all styles via JavaScript - properly scoped to prevent spillover
 function injectStyles() {
     if (document.getElementById('li-organizer-styles')) return;
-    
+
+    // Ensure document.head exists before injecting
+    if (!document.head) {
+        console.warn('Document head not ready, deferring style injection');
+        setTimeout(injectStyles, 100);
+        return;
+    }
+
     const style = document.createElement('style');
     style.id = 'li-organizer-styles';
     style.type = 'text/css';
-    
+
     // All styles are now scoped with #linkedin-organizer-panel or specific class prefixes
     const css = `
         #linkedin-organizer-panel {
@@ -374,10 +381,14 @@ function injectStyles() {
             color: #004182 !important;
         }
     `;
-    
-    style.appendChild(document.createTextNode(css));
-    document.head.appendChild(style);
-    console.log('Styles injected successfully');
+
+    try {
+        style.appendChild(document.createTextNode(css));
+        document.head.appendChild(style);
+        console.log('✅ LinkedIn Organizer: Styles injected successfully');
+    } catch (error) {
+        console.error('❌ LinkedIn Organizer: Failed to inject styles:', error);
+    }
 }
 
 function debounce(func, wait) {
@@ -811,20 +822,26 @@ function isOnSavedPostsPage() {
 
 async function init() {
     if (!isOnSavedPostsPage() || isInitialized) return;
+
+    console.log('🚀 LinkedIn Organizer: Initializing...');
     isInitialized = true;
     await getData();
     injectStyles();
     createPanel();
-    
+
     let attempts = 0;
+    const maxAttempts = 30; // Increased from 15 to 30 (15 seconds total)
     const checkInterval = setInterval(async () => {
         attempts++;
         const posts = findPosts();
+
         if (posts.length > 0) {
+            console.log(`✅ LinkedIn Organizer: Found ${posts.length} posts after ${attempts} attempts`);
             clearInterval(checkInterval);
+
             for (const post of posts) await addPostControls(post);
             await updateLabelFilter();
-            
+
             const observer = new MutationObserver(debounce(async () => {
                 const newPosts = findPosts();
                 const searchInput = document.getElementById('search-input');
@@ -835,10 +852,15 @@ async function init() {
                 else if (activeFilter === 'pinned') showPinnedOnly();
                 else if (activeFilter) filterByLabel(activeFilter);
             }, 300));
-            
+
             const main = document.querySelector('main') || document.body;
             observer.observe(main, { childList: true, subtree: true });
-        } else if (attempts >= 15) clearInterval(checkInterval);
+        } else if (attempts >= maxAttempts) {
+            console.warn(`⚠️ LinkedIn Organizer: No posts found after ${maxAttempts} attempts`);
+            clearInterval(checkInterval);
+        } else if (attempts % 5 === 0) {
+            console.log(`⏳ LinkedIn Organizer: Still waiting for posts... (attempt ${attempts}/${maxAttempts})`);
+        }
     }, 500);
 }
 
@@ -846,21 +868,68 @@ let lastUrl = location.href;
 const urlObserver = new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl) {
+        const wasOnSavedPosts = lastUrl.includes('/my-items/saved-posts');
+        const nowOnSavedPosts = url.includes('/my-items/saved-posts');
+
         lastUrl = url;
-        if (isOnSavedPostsPage() && !isInitialized) setTimeout(init, 500);
+        console.log('🔄 LinkedIn Organizer: URL changed to:', url);
+
+        // Reset if leaving saved posts page
+        if (wasOnSavedPosts && !nowOnSavedPosts) {
+            console.log('👋 LinkedIn Organizer: Left saved posts page, cleaning up');
+            isInitialized = false;
+        }
+
+        // Initialize if entering saved posts page
+        if (!wasOnSavedPosts && nowOnSavedPosts) {
+            console.log('👋 LinkedIn Organizer: Entered saved posts page');
+            isInitialized = false; // Reset flag to allow initialization
+            setTimeout(init, 1000); // Give LinkedIn SPA time to render
+        }
     }
 });
 
 function startUrlObserver() {
-    if (document.body) urlObserver.observe(document.body, {subtree: true, childList: true});
+    if (document.body) {
+        urlObserver.observe(document.body, {subtree: true, childList: true});
+        console.log('🔍 LinkedIn Organizer: URL observer started');
+    } else {
+        setTimeout(startUrlObserver, 100);
+    }
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        startUrlObserver();
-        if (isOnSavedPostsPage()) setTimeout(init, 500);
-    });
-} else {
+// Enhanced initialization with multiple strategies
+function initializeExtension() {
+    console.log('📍 LinkedIn Organizer: Current URL:', location.href);
+    console.log('📍 LinkedIn Organizer: readyState:', document.readyState);
+
     startUrlObserver();
-    if (isOnSavedPostsPage()) setTimeout(init, 500);
+
+    if (isOnSavedPostsPage()) {
+        // Try immediate initialization
+        init();
+
+        // Also try with delays to catch late-loading content
+        setTimeout(() => {
+            if (!isInitialized) {
+                console.log('⏰ LinkedIn Organizer: Retrying initialization after 1s delay');
+                init();
+            }
+        }, 1000);
+
+        setTimeout(() => {
+            if (!isInitialized) {
+                console.log('⏰ LinkedIn Organizer: Retrying initialization after 2s delay');
+                init();
+            }
+        }, 2000);
+    }
+}
+
+// Start based on document ready state
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeExtension);
+} else {
+    // Document already loaded, initialize immediately
+    initializeExtension();
 }
