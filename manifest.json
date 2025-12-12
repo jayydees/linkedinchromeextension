@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "LinkedIn Saved Posts Organizer",
+  "version": "1.0",
+  "description": "Organize, label, and search your LinkedIn saved posts",
+  "permissions": ["storage"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/my-items/saved-posts*",
+        "https://www.linkedin.com/my-items/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
