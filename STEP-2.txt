@@ -1,0 +1,32 @@
+🧪 STEP 2: TEST THE EXTENSION
+=============================
+
+Before submitting to Chrome Web Store, test it!
+
+1. Open Google Chrome
+
+2. Type in the address bar:
+   chrome://extensions/
+
+3. Turn ON "Developer mode" (toggle switch in top-right corner)
+
+4. Click "Load unpacked" button
+
+5. Navigate to and select your folder:
+   /home/user/linkedinchromeextension/
+
+6. The extension will load! You'll see it in the list.
+
+7. Now test it:
+   - Go to: https://www.linkedin.com/my-items/saved-posts/
+   - You should see a blue panel appear on the right side
+   - Try creating a label
+   - Try pinning a post
+   - Try searching
+
+8. If everything works, move to STEP-3.txt
+
+TROUBLESHOOTING:
+- If you see errors, check if all 3 icon PNG files are in the icons/ folder
+- Make sure you're on LinkedIn's saved posts page
+- Check the browser console (press F12) for any error messages
