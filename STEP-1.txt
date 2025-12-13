@@ -1,0 +1,25 @@
+🎨 STEP 1: GENERATE ICONS
+========================
+
+1. Find this file in your folder:
+   📄 create-icons.html
+
+2. Double-click it (it opens in your web browser)
+
+3. You'll see a webpage with 3 "Download" buttons
+
+4. Click each button to download:
+   - icon16.png
+   - icon48.png
+   - icon128.png
+
+5. Save all 3 files into the "icons" folder
+
+IMPORTANT: Make sure all 3 PNG files are in the icons/ folder:
+   📁 icons/
+   ├── icon.svg      ← Already there
+   ├── icon16.png    ← You need to download this
+   ├── icon48.png    ← You need to download this
+   └── icon128.png   ← You need to download this
+
+Once done, move to STEP-2.txt

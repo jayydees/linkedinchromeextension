@@ -1,0 +1,17 @@
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="24" fill="#0A66C2"/>
+
+  <!-- Document/Posts icon -->
+  <rect x="30" y="25" width="68" height="78" rx="4" fill="white"/>
+
+  <!-- Label/Tag icon -->
+  <path d="M 50 35 L 78 35 L 78 42 L 50 42 Z" fill="#0A66C2"/>
+  <path d="M 50 50 L 78 50 L 78 57 L 50 57 Z" fill="#0A66C2"/>
+  <path d="M 50 65 L 70 65 L 70 72 L 50 72 Z" fill="#0A66C2"/>
+
+  <!-- Pin icon in corner -->
+  <circle cx="85" cy="40" r="12" fill="#FFC107"/>
+  <path d="M 85 35 L 85 45" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="85" cy="48" r="1.5" fill="white"/>
+</svg>

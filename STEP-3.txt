@@ -1,0 +1,52 @@
+📦 STEP 3: CREATE THE PACKAGE FOR CHROME WEB STORE
+===================================================
+
+Now create a ZIP file to upload to Chrome Web Store.
+
+METHOD 1: Manual (Windows/Mac/Linux)
+--------------------------------------
+1. Create a new folder on your desktop called "extension-package"
+
+2. Copy these files/folders into it:
+   ✅ manifest.json
+   ✅ content.js
+   ✅ icons/ (the whole folder with all PNG files inside)
+   ✅ PRIVACY.md
+
+3. Select all those files/folders
+
+4. Right-click and choose:
+   - Windows: "Send to" → "Compressed (zipped) folder"
+   - Mac: Right-click → "Compress"
+   - Linux: Right-click → "Compress"
+
+5. Name it: linkedin-organizer-v1.0.0.zip
+
+6. You now have your package! Move to STEP-4.txt
+
+
+METHOD 2: Using the Script (Advanced - Linux/Mac only)
+-------------------------------------------------------
+1. Open Terminal in your project folder
+
+2. Run:
+   ./package.sh
+
+3. It will create: linkedin-organizer-v1.0.0.zip
+
+4. Move to STEP-4.txt
+
+
+IMPORTANT - Your ZIP should contain ONLY:
+✅ manifest.json
+✅ content.js
+✅ icons/ folder (with icon16.png, icon48.png, icon128.png)
+✅ PRIVACY.md
+
+DO NOT include:
+❌ .git folder
+❌ create-icons.html
+❌ generate-icons.py
+❌ package.sh
+❌ STEP-1.txt, STEP-2.txt, etc.
+❌ README.md (optional)
