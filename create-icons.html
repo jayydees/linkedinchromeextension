@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Extension Icons</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .icon-preview {
+            display: inline-block;
+            margin: 20px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            display: block;
+            margin: 10px 0;
+        }
+        button {
+            background: #0A66C2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #004182;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 30px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 LinkedIn Organizer - Icon Generator</h1>
+        <p>Click the buttons below to download the icons for your Chrome extension.</p>
+
+        <div class="icon-preview">
+            <h3>16x16 (Small)</h3>
+            <canvas id="icon16" width="16" height="16"></canvas>
+            <button onclick="downloadIcon('icon16', 16)">Download icon16.png</button>
+        </div>
+
+        <div class="icon-preview">
+            <h3>48x48 (Medium)</h3>
+            <canvas id="icon48" width="48" height="48"></canvas>
+            <button onclick="downloadIcon('icon48', 48)">Download icon48.png</button>
+        </div>
+
+        <div class="icon-preview">
+            <h3>128x128 (Large)</h3>
+            <canvas id="icon128" width="128" height="128"></canvas>
+            <button onclick="downloadIcon('icon128', 128)">Download icon128.png</button>
+        </div>
+
+        <div style="margin-top: 30px; padding: 15px; background: #fff; border-radius: 4px;">
+            <p><strong>Instructions:</strong></p>
+            <ol>
+                <li>Download all three icon files</li>
+                <li>Save them in the <code>icons/</code> folder of your extension</li>
+                <li>The icons will be automatically referenced in manifest.json</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function drawIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+
+            // LinkedIn blue background with rounded corners
+            ctx.fillStyle = '#0A66C2';
+            const radius = size * 0.15;
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, radius);
+            ctx.fill();
+
+            // White document/card
+            const padding = size * 0.2;
+            const docWidth = size * 0.6;
+            const docHeight = size * 0.65;
+            const docX = (size - docWidth) / 2;
+            const docY = padding;
+
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.roundRect(docX, docY, docWidth, docHeight, size * 0.05);
+            ctx.fill();
+
+            // Blue lines (labels) on the document
+            ctx.fillStyle = '#0A66C2';
+            const lineHeight = size * 0.04;
+            const lineSpacing = size * 0.1;
+            const lineMargin = size * 0.05;
+
+            for (let i = 0; i < 3; i++) {
+                const lineY = docY + lineMargin + (i * lineSpacing);
+                const lineWidth = i === 2 ? docWidth * 0.5 : docWidth * 0.7;
+                ctx.fillRect(
+                    docX + (docWidth - lineWidth) / 2,
+                    lineY,
+                    lineWidth,
+                    lineHeight
+                );
+            }
+
+            // Yellow pin indicator
+            const pinSize = size * 0.15;
+            const pinX = size - padding;
+            const pinY = padding + size * 0.1;
+
+            ctx.fillStyle = '#FFC107';
+            ctx.beginPath();
+            ctx.arc(pinX, pinY, pinSize, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pin detail (white center)
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(pinX, pinY, pinSize * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function downloadIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Draw all icons on page load
+        window.onload = function() {
+            drawIcon('icon16', 16);
+            drawIcon('icon48', 48);
+            drawIcon('icon128', 128);
+        };
+    </script>
+</body>
+</html>
