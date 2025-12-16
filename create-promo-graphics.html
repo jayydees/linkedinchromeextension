@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LinkedIn Organizer - Promo Graphics Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+        }
+        h1 { color: #0A66C2; margin-bottom: 30px; }
+        .promo-section {
+            margin: 40px 0;
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #ddd;
+            margin: 20px 0;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #0A66C2;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 10px;
+        }
+        button:hover { background: #004182; }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .feature-list {
+            text-align: left;
+            display: inline-block;
+            margin: 20px 0;
+        }
+        .feature-item {
+            margin: 10px 0;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 LinkedIn Organizer - Promo Graphics</h1>
+
+        <div class="info">
+            <strong>📋 Instructions:</strong>
+            <ol>
+                <li>Click each "Download" button below</li>
+                <li>Save the images to your computer</li>
+                <li>Upload them to Chrome Web Store</li>
+            </ol>
+        </div>
+
+        <!-- Small Promo Tile -->
+        <div class="promo-section">
+            <h2>Small Promo Tile (440x280)</h2>
+            <canvas id="smallTile" width="440" height="280"></canvas>
+            <button onclick="downloadCanvas('smallTile', 'small-promo-tile.png')">Download Small Tile</button>
+        </div>
+
+        <!-- Marquee Promo Tile -->
+        <div class="promo-section">
+            <h2>Marquee Promo Tile (1400x560)</h2>
+            <canvas id="marqueeTile" width="1400" height="560"></canvas>
+            <button onclick="downloadCanvas('marqueeTile', 'marquee-promo-tile.png')">Download Marquee Tile</button>
+        </div>
+
+        <div class="info">
+            <strong>✅ What About Screenshots?</strong><br>
+            You already have great screenshots! Just upload the images you showed me:
+            <ul>
+                <li>The extension panel UI</li>
+                <li>The extension working on LinkedIn saved posts page</li>
+                <li>Close-up of the labels feature</li>
+            </ul>
+            Chrome accepts 640x400 or 1280x800. Your screenshots are already perfect!
+        </div>
+    </div>
+
+    <script>
+        function drawSmallTile() {
+            const canvas = document.getElementById('smallTile');
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 440, 280);
+            gradient.addColorStop(0, '#0A66C2');
+            gradient.addColorStop(1, '#004182');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 440, 280);
+
+            // Icon circle
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.beginPath();
+            ctx.arc(110, 140, 70, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Icon
+            ctx.fillStyle = 'white';
+            ctx.fillRect(90, 120, 40, 40);
+
+            // Label lines on icon
+            ctx.fillStyle = '#0A66C2';
+            ctx.fillRect(95, 128, 30, 4);
+            ctx.fillRect(95, 138, 30, 4);
+            ctx.fillRect(95, 148, 20, 4);
+
+            // Pin indicator
+            ctx.fillStyle = '#FFC107';
+            ctx.beginPath();
+            ctx.arc(120, 125, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 32px -apple-system, system-ui, sans-serif';
+            ctx.fillText('LinkedIn Saved', 200, 110);
+            ctx.fillText('Posts Organizer', 200, 150);
+
+            ctx.font = '16px -apple-system, system-ui, sans-serif';
+            ctx.fillText('Organize • Label • Search', 200, 190);
+        }
+
+        function drawMarqueeTile() {
+            const canvas = document.getElementById('marqueeTile');
+            const ctx = canvas.getContext('2d');
+
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 1400, 560);
+            gradient.addColorStop(0, '#0A66C2');
+            gradient.addColorStop(1, '#004182');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 1400, 560);
+
+            // Decorative circles
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.beginPath();
+            ctx.arc(1200, 100, 150, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(1300, 400, 100, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Main icon (larger)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.beginPath();
+            ctx.arc(220, 280, 120, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = 'white';
+            ctx.fillRect(180, 250, 80, 60);
+
+            // Label lines
+            ctx.fillStyle = '#0A66C2';
+            ctx.fillRect(190, 265, 60, 6);
+            ctx.fillRect(190, 280, 60, 6);
+            ctx.fillRect(190, 295, 40, 6);
+
+            // Pin
+            ctx.fillStyle = '#FFC107';
+            ctx.beginPath();
+            ctx.arc(245, 260, 15, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Title
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 72px -apple-system, system-ui, sans-serif';
+            ctx.fillText('LinkedIn Saved Posts', 400, 200);
+            ctx.fillText('Organizer', 400, 280);
+
+            // Subtitle
+            ctx.font = '32px -apple-system, system-ui, sans-serif';
+            ctx.fillText('Never lose track of valuable content again', 400, 340);
+
+            // Features
+            ctx.font = '24px -apple-system, system-ui, sans-serif';
+            ctx.fillText('🏷️  Custom Labels  •  📌 Pin Posts  •  📝 Add Notes  •  🔍 Search', 400, 410);
+
+            // Bottom badge
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(400, 450, 500, 50);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 20px -apple-system, system-ui, sans-serif';
+            ctx.fillText('✨ Free & Privacy-Focused • All Data Stored Locally', 420, 482);
+        }
+
+        function downloadCanvas(canvasId, filename) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+
+            // Visual feedback
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Downloaded!';
+            btn.style.background = '#28a745';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '#0A66C2';
+            }, 2000);
+        }
+
+        // Draw on page load
+        window.onload = function() {
+            drawSmallTile();
+            drawMarqueeTile();
+        };
+    </script>
+</body>
+</html>

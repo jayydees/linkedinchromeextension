@@ -1,0 +1,111 @@
+📸 SCREENSHOTS GUIDE - Super Simple!
+=====================================
+
+Good news: You already have GREAT screenshots! 🎉
+
+The screenshots you showed me are perfect. Here's what to do:
+
+STEP 1: Prepare Your Screenshots
+---------------------------------
+You need 3-5 screenshots showing the extension in action.
+
+From your images, you should upload:
+
+1. ✅ Full LinkedIn page with extension panel visible (the one with posts on left, panel on right)
+2. ✅ Close-up of the extension panel showing all features
+3. ✅ Extension with labels applied to posts (showing the label pills)
+
+Optional (if you want more):
+4. Search feature in action
+5. Pinned posts view
+
+
+STEP 2: Screenshot Requirements
+--------------------------------
+Chrome Web Store accepts:
+- Size: 1280x800 or 640x400 pixels
+- Format: JPEG or PNG (PNG recommended)
+- File size: Under 5MB each
+- No alpha/transparency
+
+Your current screenshots look perfect for this!
+
+
+STEP 3: How to Prepare Screenshots
+-----------------------------------
+
+Option A - Use As-Is (Easiest):
+1. The screenshots you already have are probably fine!
+2. Just crop them to remove any personal info
+3. Save as PNG
+
+Option B - Take New Screenshots (If needed):
+1. Open extension on LinkedIn saved posts page
+2. Press F12 (DevTools)
+3. Press Ctrl/Cmd + Shift + P
+4. Type "screenshot"
+5. Select "Capture screenshot"
+6. Saves automatically!
+
+Option C - Crop Existing (If too big):
+1. Open your screenshot in any image editor (Paint, Preview, etc.)
+2. Crop to 1280x800 (or just crop out personal info)
+3. Save as PNG
+
+
+STEP 4: What Makes Good Screenshots
+------------------------------------
+✅ Show the extension in action
+✅ Highlight key features (labels, pins, notes, search)
+✅ Clear, readable text
+✅ No personal/sensitive information
+✅ Professional looking
+
+❌ Don't include your personal LinkedIn posts (blur if needed)
+❌ Don't show your profile info
+❌ Don't make it too cluttered
+
+
+STEP 5: Upload to Chrome Web Store
+-----------------------------------
+1. Go to your draft listing
+2. Scroll to "Screenshots" section
+3. Click "Drop image here" or "+"
+4. Upload your 3-5 screenshots
+5. You can reorder them by dragging
+6. First screenshot is the most important (shown in search results)
+
+
+SUGGESTED SCREENSHOT ORDER:
+---------------------------
+1st: Full page view (panel + LinkedIn posts) - Shows context
+2nd: Extension panel close-up - Shows features clearly
+3rd: Labels in action - Shows organization feature
+4th (optional): Search being used
+5th (optional): Pinned posts view
+
+
+QUICK TIP:
+----------
+If you want to add annotations (arrows, text highlights):
+1. Use free tools like:
+   - Windows: Paint, Paint 3D, Snip & Sketch
+   - Mac: Preview (built-in)
+   - Online: Photopea.com (free Photoshop alternative)
+   - Browser: Canva.com (has free annotation tools)
+
+2. Add arrows pointing to:
+   - "Create labels here"
+   - "Pin any post"
+   - "Search instantly"
+   - "Filter by label"
+
+
+YOU'RE ALMOST DONE! 🎉
+----------------------
+After you:
+1. Download promo tiles (from create-promo-graphics.html)
+2. Prepare your 3-5 screenshots
+3. Upload everything to Chrome Web Store
+
+You'll be ready to submit! 🚀
