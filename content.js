@@ -144,7 +144,22 @@ function injectStyles() {
             border-color: #004182 !important;
             color: #004182 !important;
         }
-        
+
+        #linkedin-organizer-panel .go-to-saved-posts-btn {
+            width: 100% !important;
+            margin: 0 0 16px 0 !important;
+            padding: 12px 20px !important;
+            font-size: 15px !important;
+            border-radius: 6px !important;
+            background: #0a66c2 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        }
+
+        #linkedin-organizer-panel .go-to-saved-posts-btn:hover {
+            background: #004182 !important;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
+        }
+
         #linkedin-organizer-panel .label-pills {
             display: flex !important;
             flex-wrap: wrap !important;
@@ -454,6 +469,9 @@ function createPanel() {
             <button id="toggle-panel">−</button>
         </div>
         <div id="organizer-content">
+            <button class="organizer-btn go-to-saved-posts-btn" id="go-to-saved-posts">
+                📋 Go to Saved Posts
+            </button>
             <div class="status-indicator">✔ Extension Active</div>
             <div class="organizer-section">
                 <label>🔍 Search Posts</label>
@@ -501,6 +519,9 @@ function setupPanelListeners() {
         const panel = document.getElementById('linkedin-organizer-panel');
         panel.classList.toggle('minimized');
         this.textContent = panel.classList.contains('minimized') ? '+' : '−';
+    };
+    document.getElementById('go-to-saved-posts').onclick = () => {
+        window.location.href = 'https://www.linkedin.com/my-items/saved-posts/';
     };
     const searchInput = document.getElementById('search-input');
     searchInput.oninput = debounce((e) => searchPosts(e.target.value), 300);
