@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn Saved Posts Organizer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Organize, label, and search your LinkedIn saved posts with tags, pins, and notes. Never lose track of valuable content!",
   "author": "Jatin",
   "icons": {
@@ -9,15 +9,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://www.linkedin.com/*"
   ],
   "content_scripts": [
     {
       "matches": [
-        "https://www.linkedin.com/my-items/saved-posts*",
-        "https://www.linkedin.com/my-items/*"
+        "https://www.linkedin.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -25,10 +24,14 @@
   ],
   "action": {
     "default_title": "LinkedIn Saved Posts Organizer",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
+  },
+  "background": {
+    "service_worker": "background.js"
   }
 }
