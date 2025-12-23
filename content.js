@@ -2,9 +2,33 @@
 console.log('🚀 LinkedIn Organizer: Extension loaded!');
 
 const STORAGE_KEY = 'linkedin_posts_data';
+const STORAGE_KEY_ENABLED = 'extension_enabled';
 let currentData = { labels: {}, pins: [], notes: {}, availableLabels: [] };
 let activeFilter = null;
 let isInitialized = false;
+let isExtensionEnabled = true; // Default to enabled
+
+// Listen for toggle messages from popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'toggleExtension') {
+        isExtensionEnabled = message.enabled;
+        const panel = document.getElementById('linkedin-organizer-panel');
+
+        if (isExtensionEnabled) {
+            // Show panel
+            if (!panel && isOnLinkedIn()) {
+                init();
+            } else if (panel) {
+                panel.style.display = '';
+            }
+        } else {
+            // Hide panel
+            if (panel) {
+                panel.style.display = 'none';
+            }
+        }
+    }
+});
 
 // Inject all styles via JavaScript - properly scoped to prevent spillover
 function injectStyles() {
@@ -144,7 +168,22 @@ function injectStyles() {
             border-color: #004182 !important;
             color: #004182 !important;
         }
-        
+
+        #linkedin-organizer-panel .go-to-saved-posts-btn {
+            width: 100% !important;
+            margin: 0 0 16px 0 !important;
+            padding: 12px 20px !important;
+            font-size: 15px !important;
+            border-radius: 6px !important;
+            background: #0a66c2 !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        }
+
+        #linkedin-organizer-panel .go-to-saved-posts-btn:hover {
+            background: #004182 !important;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
+        }
+
         #linkedin-organizer-panel .label-pills {
             display: flex !important;
             flex-wrap: wrap !important;
@@ -454,6 +493,9 @@ function createPanel() {
             <button id="toggle-panel">−</button>
         </div>
         <div id="organizer-content">
+            <button class="organizer-btn go-to-saved-posts-btn" id="go-to-saved-posts">
+                📋 Go to Saved Posts
+            </button>
             <div class="status-indicator">✔ Extension Active</div>
             <div class="organizer-section">
                 <label>🔍 Search Posts</label>
@@ -501,6 +543,9 @@ function setupPanelListeners() {
         const panel = document.getElementById('linkedin-organizer-panel');
         panel.classList.toggle('minimized');
         this.textContent = panel.classList.contains('minimized') ? '+' : '−';
+    };
+    document.getElementById('go-to-saved-posts').onclick = () => {
+        window.location.href = 'https://www.linkedin.com/my-items/saved-posts/';
     };
     const searchInput = document.getElementById('search-input');
     searchInput.oninput = debounce((e) => searchPosts(e.target.value), 300);
@@ -820,8 +865,30 @@ function isOnSavedPostsPage() {
     return window.location.href.includes('/my-items/saved-posts');
 }
 
+function isOnLinkedIn() {
+    return window.location.href.includes('linkedin.com');
+}
+
+async function checkExtensionState() {
+    try {
+        const result = await chrome.storage.local.get([STORAGE_KEY_ENABLED]);
+        isExtensionEnabled = result[STORAGE_KEY_ENABLED] !== false; // Default to true
+        return isExtensionEnabled;
+    } catch (error) {
+        console.error('Error checking extension state:', error);
+        return true;
+    }
+}
+
 async function init() {
-    if (!isOnSavedPostsPage() || isInitialized) return;
+    if (!isOnLinkedIn() || isInitialized) return;
+
+    // Check if extension is enabled
+    const enabled = await checkExtensionState();
+    if (!enabled) {
+        console.log('🚀 LinkedIn Organizer: Extension is disabled');
+        return;
+    }
 
     console.log('🚀 LinkedIn Organizer: Initializing...');
     isInitialized = true;
@@ -868,22 +935,21 @@ let lastUrl = location.href;
 const urlObserver = new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl) {
-        const wasOnSavedPosts = lastUrl.includes('/my-items/saved-posts');
-        const nowOnSavedPosts = url.includes('/my-items/saved-posts');
+        const wasOnLinkedIn = lastUrl.includes('linkedin.com');
+        const nowOnLinkedIn = url.includes('linkedin.com');
 
         lastUrl = url;
         console.log('🔄 LinkedIn Organizer: URL changed to:', url);
 
-        // Reset if leaving saved posts page
-        if (wasOnSavedPosts && !nowOnSavedPosts) {
-            console.log('👋 LinkedIn Organizer: Left saved posts page, cleaning up');
+        // Reset if leaving LinkedIn
+        if (wasOnLinkedIn && !nowOnLinkedIn) {
+            console.log('👋 LinkedIn Organizer: Left LinkedIn');
             isInitialized = false;
         }
 
-        // Initialize if entering saved posts page
-        if (!wasOnSavedPosts && nowOnSavedPosts) {
-            console.log('👋 LinkedIn Organizer: Entered saved posts page');
-            isInitialized = false; // Reset flag to allow initialization
+        // Initialize if on LinkedIn and extension is enabled
+        if (nowOnLinkedIn && !isInitialized) {
+            console.log('👋 LinkedIn Organizer: On LinkedIn page');
             setTimeout(init, 1000); // Give LinkedIn SPA time to render
         }
     }
@@ -905,7 +971,7 @@ function initializeExtension() {
 
     startUrlObserver();
 
-    if (isOnSavedPostsPage()) {
+    if (isOnLinkedIn()) {
         // Try immediate initialization
         init();
 
