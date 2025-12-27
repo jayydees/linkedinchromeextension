@@ -1156,25 +1156,10 @@ async function toggleFilter(label) {
 }
 
 async function filterByLabel(label) {
-    const data = currentData;
-    const posts = findPosts();
-
-    if (posts.length === 0) {
-        return;
-    }
-
-    // Mark all posts with visibility attribute - browser handles hiding instantly
-    posts.forEach(post => {
-        const postId = getPostId(post);
-        const postLabels = data.labels[postId] || [];
-        const hasLabel = postLabels.includes(label);
-
-        // Set data attribute - CSS will hide/show instantly (no flickering)
-        post.setAttribute('data-li-org-visible', hasLabel ? 'true' : 'false');
-    });
-
-    const visibleCount = posts.filter(p => p.getAttribute('data-li-org-visible') === 'true').length;
-    console.log(`✅ Filtered by "${label}": ${visibleCount} of ${posts.length} posts visible`);
+    // Refresh page to reset to original post order and load from beginning
+    // Store filter in sessionStorage so we can apply it after refresh
+    sessionStorage.setItem('li-org-pending-filter', label);
+    location.reload();
 }
 
 async function removeLabel(label) {
@@ -1196,6 +1181,10 @@ async function removeLabel(label) {
 
 async function showAll() {
     activeFilter = null;
+
+    // Clear any pending filter from sessionStorage
+    sessionStorage.removeItem('li-org-pending-filter');
+
     const posts = findPosts();
 
     if (posts.length === 0) {
@@ -1401,6 +1390,25 @@ async function init() {
                 processedPosts.add(post);
             }
             await updateLabelFilter();
+
+            // Check if there's a pending filter from before page refresh
+            const pendingFilter = sessionStorage.getItem('li-org-pending-filter');
+            if (pendingFilter) {
+                sessionStorage.removeItem('li-org-pending-filter');
+                activeFilter = pendingFilter;
+
+                // Apply filter to loaded posts
+                const data = currentData;
+                posts.forEach(post => {
+                    const postId = getPostId(post);
+                    const postLabels = data.labels[postId] || [];
+                    const hasLabel = postLabels.includes(pendingFilter);
+                    post.setAttribute('data-li-org-visible', hasLabel ? 'true' : 'false');
+                });
+
+                await updateLabelFilter();
+                console.log(`✅ Applied pending filter: "${pendingFilter}"`);
+            }
 
             // Handle new posts from infinite scroll - simple and fast
             const observer = new MutationObserver(debounce(async () => {
