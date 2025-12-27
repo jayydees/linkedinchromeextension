@@ -1156,19 +1156,10 @@ async function toggleFilter(label) {
 }
 
 async function filterByLabel(label) {
-    // Scroll to top to ensure we start filtering from the beginning
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    // Wait a moment for LinkedIn to load initial posts
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     const data = currentData;
     const posts = findPosts();
 
     if (posts.length === 0) {
-        alert('⚠️ No posts found.\n\nThe page might still be loading. Please wait a moment and try again.');
-        activeFilter = null;
-        updateLabelFilter();
         return;
     }
 
@@ -1184,19 +1175,6 @@ async function filterByLabel(label) {
 
     const visibleCount = posts.filter(p => p.getAttribute('data-li-org-visible') === 'true').length;
     console.log(`✅ Filtered by "${label}": ${visibleCount} of ${posts.length} posts visible`);
-
-    // Show helpful message if no results
-    if (visibleCount === 0) {
-        const totalLabeled = Object.keys(data.labels).filter(id => data.labels[id].includes(label)).length;
-        if (totalLabeled > 0) {
-            alert(`ℹ️ No posts with "${label}" found on screen.\n\nYou have ${totalLabeled} post(s) tagged with this label, but they're not loaded yet.\n\nTry scrolling down to load more posts, then click the filter again.`);
-        } else {
-            alert(`ℹ️ No posts tagged with "${label}".\n\nTag some posts first by clicking the 🏷️ button on any post.`);
-        }
-        // Unfilter if no results
-        activeFilter = null;
-        await showAll();
-    }
 }
 
 async function removeLabel(label) {
