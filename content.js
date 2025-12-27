@@ -8,6 +8,11 @@ let activeFilter = null;
 let isInitialized = false;
 let isExtensionEnabled = true; // Default to enabled
 
+// Performance optimization variables
+let postIdCache = new WeakMap(); // Cache post IDs to avoid recalculation
+let currentFilterOperation = null; // Track ongoing filter operation for cancellation
+let isFiltering = false; // Flag to prevent concurrent filtering
+
 // Listen for toggle messages from popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'toggleExtension') {
@@ -419,6 +424,63 @@ function injectStyles() {
             border-color: #004182 !important;
             color: #004182 !important;
         }
+
+        /* Performance optimization - hide filtered posts with class */
+        .li-org-filtered-out {
+            display: none !important;
+        }
+
+        /* Loading indicator */
+        #linkedin-organizer-panel .loading-indicator {
+            background: #fff3cd !important;
+            color: #856404 !important;
+            padding: 12px !important;
+            border-radius: 4px !important;
+            font-size: 13px !important;
+            margin-bottom: 16px !important;
+            border: 1px solid #ffeeba !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 12px !important;
+        }
+
+        #linkedin-organizer-panel .loading-indicator .loading-text {
+            flex: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+        }
+
+        #linkedin-organizer-panel .loading-spinner {
+            display: inline-block !important;
+            width: 14px !important;
+            height: 14px !important;
+            border: 2px solid #856404 !important;
+            border-top-color: transparent !important;
+            border-radius: 50% !important;
+            animation: li-org-spin 0.8s linear infinite !important;
+        }
+
+        @keyframes li-org-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #linkedin-organizer-panel .stop-btn {
+            background: #dc3545 !important;
+            color: #fff !important;
+            border: none !important;
+            padding: 6px 12px !important;
+            border-radius: 4px !important;
+            cursor: pointer !important;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            transition: background .2s !important;
+        }
+
+        #linkedin-organizer-panel .stop-btn:hover {
+            background: #c82333 !important;
+        }
     `;
 
     try {
@@ -438,6 +500,123 @@ function debounce(func, wait) {
     };
 }
 
+// Loading indicator functions
+function showLoadingIndicator(message = 'Processing posts...') {
+    hideLoadingIndicator(); // Remove any existing indicator
+
+    const content = document.getElementById('organizer-content');
+    if (!content) return;
+
+    const indicator = document.createElement('div');
+    indicator.className = 'loading-indicator';
+    indicator.id = 'li-org-loading';
+    indicator.innerHTML = `
+        <div class="loading-text">
+            <span class="loading-spinner"></span>
+            <span id="loading-message">${message}</span>
+        </div>
+        <button class="stop-btn" id="stop-filter-btn">Stop</button>
+    `;
+
+    // Insert after "Go to Saved Posts" button or at the start
+    const firstChild = content.firstElementChild;
+    if (firstChild) {
+        content.insertBefore(indicator, firstChild.nextSibling || firstChild);
+    } else {
+        content.prepend(indicator);
+    }
+
+    // Add stop button listener
+    const stopBtn = document.getElementById('stop-filter-btn');
+    if (stopBtn) {
+        stopBtn.onclick = () => {
+            if (currentFilterOperation) {
+                currentFilterOperation.cancelled = true;
+                console.log('🛑 User cancelled filter operation');
+            }
+            hideLoadingIndicator();
+        };
+    }
+}
+
+function updateLoadingMessage(message) {
+    const loadingMsg = document.getElementById('loading-message');
+    if (loadingMsg) {
+        loadingMsg.textContent = message;
+    }
+}
+
+function hideLoadingIndicator() {
+    const indicator = document.getElementById('li-org-loading');
+    if (indicator) {
+        indicator.remove();
+    }
+    isFiltering = false;
+}
+
+// Optimized batched filtering with cancellation support
+async function batchedFilter(posts, filterFn, operationName = 'filter') {
+    // Prevent concurrent filtering operations
+    if (isFiltering) {
+        console.log('⏸️ Filter already in progress, cancelling previous operation');
+        if (currentFilterOperation) {
+            currentFilterOperation.cancelled = true;
+        }
+    }
+
+    isFiltering = true;
+    const operation = { cancelled: false };
+    currentFilterOperation = operation;
+
+    const BATCH_SIZE = 50; // Process 50 posts at a time
+    const totalPosts = posts.length;
+    let processed = 0;
+
+    showLoadingIndicator(`Processing ${totalPosts} posts...`);
+
+    return new Promise((resolve) => {
+        function processBatch(startIndex) {
+            // Check if operation was cancelled
+            if (operation.cancelled) {
+                console.log(`🛑 ${operationName} cancelled`);
+                hideLoadingIndicator();
+                resolve(false);
+                return;
+            }
+
+            const endIndex = Math.min(startIndex + BATCH_SIZE, totalPosts);
+            const batch = posts.slice(startIndex, endIndex);
+
+            // Process batch
+            batch.forEach(post => {
+                try {
+                    filterFn(post);
+                } catch (error) {
+                    console.error('Error filtering post:', error);
+                }
+            });
+
+            processed = endIndex;
+            const progress = Math.round((processed / totalPosts) * 100);
+            updateLoadingMessage(`Processing ${processed}/${totalPosts} posts (${progress}%)`);
+
+            // Continue with next batch or finish
+            if (endIndex < totalPosts) {
+                // Use requestAnimationFrame for smooth, non-blocking updates
+                requestAnimationFrame(() => processBatch(endIndex));
+            } else {
+                // Finished
+                hideLoadingIndicator();
+                console.log(`✅ ${operationName} completed: ${totalPosts} posts processed`);
+                resolve(true);
+            }
+        }
+
+        // Start processing with a small delay to allow UI to update
+        requestAnimationFrame(() => processBatch(0));
+    });
+}
+
 async function getData() {
     return new Promise((resolve) => {
         chrome.storage.local.get([STORAGE_KEY], (result) => {
@@ -455,11 +634,25 @@ async function saveData(data) {
 }
 
 function getPostId(element) {
+    // Check cache first - massive performance improvement
+    if (postIdCache.has(element)) {
+        return postIdCache.get(element);
+    }
+
+    let postId;
+
+    // Try to get ID from post link (most reliable)
     const link = element.querySelector('a[href*="/posts/"], a[href*="/feed/update/"]');
     if (link && link.href) {
         const match = link.href.match(/(?:posts|update)\/([^/?]+)/);
-        if (match) return match[1];
+        if (match) {
+            postId = match[1];
+            postIdCache.set(element, postId);
+            return postId;
+        }
     }
+
+    // Fallback: generate ID from author + timestamp
     const author = element.querySelector('.update-components-actor__name, [data-control-name="actor"]');
     const time = element.querySelector('time');
     if (author && time) {
@@ -469,15 +662,21 @@ function getPostId(element) {
             hash = ((hash << 5) - hash) + id.charCodeAt(i);
             hash = hash & hash;
         }
-        return Math.abs(hash).toString(36);
+        postId = Math.abs(hash).toString(36);
+        postIdCache.set(element, postId);
+        return postId;
     }
+
+    // Last resort: hash first 100 chars of text
     const text = element.textContent.substring(0, 100);
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
         hash = ((hash << 5) - hash) + text.charCodeAt(i);
         hash = hash & hash;
     }
-    return Math.abs(hash).toString(36);
+    postId = Math.abs(hash).toString(36);
+    postIdCache.set(element, postId);
+    return postId;
 }
 
 function createPanel() {
@@ -569,10 +768,20 @@ function setupPanelListeners() {
 }
 
 function findPosts() {
-    const selectors = ['li.reusable-search__result-container','.reusable-search__result-container','main ul > li'];
+    // Optimized: Try selectors in order of specificity, avoid expensive text content check
+    const selectors = [
+        'li.reusable-search__result-container',
+        '.reusable-search__result-container',
+        'main ul > li'
+    ];
+
     for (const sel of selectors) {
-        const posts = Array.from(document.querySelectorAll(sel)).filter(p => p.textContent.trim().length > 50);
-        if (posts.length > 0) return posts;
+        const posts = Array.from(document.querySelectorAll(sel));
+        if (posts.length > 0) {
+            // Only filter out very small elements (likely not posts)
+            // This is much faster than checking text content length
+            return posts.filter(p => p.offsetHeight > 100);
+        }
     }
     return [];
 }
@@ -786,24 +995,38 @@ async function updateLabelFilter() {
     });
 }
 
-function toggleFilter(label) {
+async function toggleFilter(label) {
     if (activeFilter === label) {
         activeFilter = null;
-        showAll();
+        await showAll();
     } else {
         activeFilter = label;
-        filterByLabel(label);
+        await filterByLabel(label);
     }
     updateLabelFilter();
 }
 
-function filterByLabel(label) {
+async function filterByLabel(label) {
     const data = currentData;
-    findPosts().forEach(post => {
+    const posts = findPosts();
+
+    if (posts.length === 0) {
+        console.log('No posts found to filter');
+        return;
+    }
+
+    console.log(`🔍 Filtering ${posts.length} posts by label: "${label}"`);
+
+    await batchedFilter(posts, (post) => {
         const postId = getPostId(post);
         const postLabels = data.labels[postId] || [];
-        post.style.display = postLabels.includes(label) ? '' : 'none';
-    });
+
+        if (postLabels.includes(label)) {
+            post.classList.remove('li-org-filtered-out');
+        } else {
+            post.classList.add('li-org-filtered-out');
+        }
+    }, `Filter by "${label}"`);
 }
 
 async function removeLabel(label) {
@@ -815,38 +1038,87 @@ async function removeLabel(label) {
         if (data.labels[postId].length === 0) delete data.labels[postId];
     });
     await saveData(data);
-    if (activeFilter === label) { activeFilter = null; showAll(); }
+    if (activeFilter === label) {
+        activeFilter = null;
+        await showAll();
+    }
     findPosts().forEach(post => updatePostDisplay(post, getPostId(post)));
     updateLabelFilter();
 }
 
-function showAll() {
+async function showAll() {
     activeFilter = null;
-    findPosts().forEach(post => post.style.display = '');
+    const posts = findPosts();
+
+    if (posts.length === 0) {
+        return;
+    }
+
+    console.log(`👁️ Showing all ${posts.length} posts`);
+
+    await batchedFilter(posts, (post) => {
+        post.classList.remove('li-org-filtered-out');
+    }, 'Show all posts');
+
     updateLabelFilter();
 }
 
 async function showPinnedOnly() {
     activeFilter = 'pinned';
     const data = await getData();
-    findPosts().forEach(post => {
-        const postId = getPostId(post);
-        post.style.display = data.pins.includes(postId) ? '' : 'none';
-    });
-}
-
-function searchPosts(query) {
     const posts = findPosts();
-    if (!query.trim()) {
-        if (activeFilter === 'pinned') showPinnedOnly();
-        else if (activeFilter) filterByLabel(activeFilter);
-        else showAll();
+
+    if (posts.length === 0) {
+        console.log('No posts found to filter');
         return;
     }
+
+    console.log(`📌 Filtering ${posts.length} posts to show pinned only`);
+
+    await batchedFilter(posts, (post) => {
+        const postId = getPostId(post);
+        const isPinned = data.pins.includes(postId);
+
+        if (isPinned) {
+            post.classList.remove('li-org-filtered-out');
+        } else {
+            post.classList.add('li-org-filtered-out');
+        }
+    }, 'Show pinned posts');
+}
+
+async function searchPosts(query) {
+    const posts = findPosts();
+
+    if (!query.trim()) {
+        // No search query - restore previous filter
+        if (activeFilter === 'pinned') {
+            await showPinnedOnly();
+        } else if (activeFilter) {
+            await filterByLabel(activeFilter);
+        } else {
+            await showAll();
+        }
+        return;
+    }
+
+    if (posts.length === 0) {
+        console.log('No posts found to search');
+        return;
+    }
+
     const lowerQuery = query.toLowerCase();
-    posts.forEach(post => {
-        post.style.display = post.textContent.toLowerCase().includes(lowerQuery) ? '' : 'none';
-    });
+    console.log(`🔍 Searching ${posts.length} posts for: "${query}"`);
+
+    await batchedFilter(posts, (post) => {
+        const matchesSearch = post.textContent.toLowerCase().includes(lowerQuery);
+
+        if (matchesSearch) {
+            post.classList.remove('li-org-filtered-out');
+        } else {
+            post.classList.add('li-org-filtered-out');
+        }
+    }, `Search for "${query}"`);
 }
 
 async function exportData() {
