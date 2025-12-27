@@ -667,100 +667,152 @@ function getPostId(element) {
 
     let postId;
 
-    // Try to get ID from post link (most reliable) - look for ALL links and pick the best one
-    const links = element.querySelectorAll('a[href*="/posts/"], a[href*="/feed/update/"], a[href*="urn:li:activity:"]');
-    if (links.length > 0) {
-        // Priority: Direct post links > activity URNs > update links
-        for (const link of links) {
-            if (link.href && link.href.includes('/posts/')) {
-                const match = link.href.match(/\/posts\/([a-zA-Z0-9_-]+)/);
-                if (match && match[1]) {
-                    postId = 'post_' + match[1];
-                    break;
-                }
+    // Strategy 1: Try data-chameleon-result-urn (MOST stable for saved posts)
+    const chameleonUrn = element.querySelector('[data-chameleon-result-urn]');
+    if (chameleonUrn) {
+        const urn = chameleonUrn.getAttribute('data-chameleon-result-urn');
+        if (urn) {
+            const match = urn.match(/urn:li:activity:(\d+)/);
+            if (match && match[1]) {
+                postId = 'urn_activity_' + match[1];
+                postIdCache.set(element, postId);
+                element.setAttribute('data-li-org-post-id', postId);
+                return postId;
             }
-        }
-
-        // Fallback to activity URN
-        if (!postId) {
-            for (const link of links) {
-                if (link.href && link.href.includes('urn:li:activity:')) {
-                    const match = link.href.match(/urn:li:activity:(\d+)/);
-                    if (match && match[1]) {
-                        postId = 'activity_' + match[1];
-                        break;
-                    }
-                }
-            }
-        }
-
-        // Fallback to feed update
-        if (!postId) {
-            for (const link of links) {
-                if (link.href && link.href.includes('/feed/update/')) {
-                    const match = link.href.match(/\/feed\/update\/([^/?]+)/);
-                    if (match && match[1]) {
-                        postId = 'update_' + match[1];
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (postId) {
-            postIdCache.set(element, postId);
-            element.setAttribute('data-li-org-post-id', postId);
-            console.log('✅ Found link-based ID:', postId);
-            return postId;
         }
     }
 
-    // Fallback 2: Try data-urn attribute (more stable than links)
-    const urnElement = element.querySelector('[data-urn]');
-    if (urnElement) {
-        const urn = urnElement.getAttribute('data-urn');
-        const match = urn.match(/urn:li:\w+:(\d+)/);
-        if (match && match[1]) {
-            postId = 'urn_' + match[1];
-            postIdCache.set(element, postId);
-            element.setAttribute('data-li-org-post-id', postId);
-            console.log('✅ Found URN-based ID:', postId);
-            return postId;
-        }
-    }
-
-    // Fallback 3: generate stable ID from author + timestamp
-    const author = element.querySelector('.update-components-actor__name, [data-control-name="actor"], .update-components-actor__title');
-    const time = element.querySelector('time');
-    if (author && time) {
-        const authorText = author.textContent.trim();
-        const timeValue = time.getAttribute('datetime') || time.textContent.trim();
-        if (authorText && timeValue) {
-            const id = `${authorText}-${timeValue}`;
-            let hash = 0;
-            for (let i = 0; i < id.length; i++) {
-                hash = ((hash << 5) - hash) + id.charCodeAt(i);
-                hash = hash & hash;
+    // Strategy 1b: Try other data-urn attributes (fallback)
+    const urnElements = element.querySelectorAll('[data-urn]');
+    for (const urnEl of urnElements) {
+        const urn = urnEl.getAttribute('data-urn');
+        if (urn) {
+            // Look for activity URN patterns
+            const match = urn.match(/urn:li:activity:(\d+)/);
+            if (match && match[1]) {
+                postId = 'urn_activity_' + match[1];
+                postIdCache.set(element, postId);
+                element.setAttribute('data-li-org-post-id', postId);
+                return postId;
             }
-            postId = 'hash_' + Math.abs(hash).toString(36);
-            postIdCache.set(element, postId);
-            element.setAttribute('data-li-org-post-id', postId);
-            console.warn('⚠️ Using hash-based ID (author+time):', postId, 'for', authorText.substring(0, 30));
-            return postId;
+            // Look for other URN patterns
+            const match2 = urn.match(/urn:li:([^:]+):(\d+)/);
+            if (match2 && match2[2]) {
+                postId = 'urn_' + match2[1] + '_' + match2[2];
+                postIdCache.set(element, postId);
+                element.setAttribute('data-li-org-post-id', postId);
+                return postId;
+            }
         }
     }
 
-    // Last resort: hash first 200 chars of text (increased from 100 for better uniqueness)
-    const text = element.textContent.substring(0, 200);
+    // Strategy 2: Try to get ID from post links
+    const links = element.querySelectorAll('a[href]');
+    for (const link of links) {
+        const href = link.href;
+
+        // Direct post links (highest priority)
+        if (href.includes('/posts/')) {
+            const match = href.match(/\/posts\/([a-zA-Z0-9_-]+)/);
+            if (match && match[1]) {
+                postId = 'post_' + match[1];
+                postIdCache.set(element, postId);
+                element.setAttribute('data-li-org-post-id', postId);
+                return postId;
+            }
+        }
+
+        // Feed update links
+        if (href.includes('/feed/update/urn:li:activity:')) {
+            const match = href.match(/urn:li:activity:(\d+)/);
+            if (match && match[1]) {
+                postId = 'activity_' + match[1];
+                postIdCache.set(element, postId);
+                element.setAttribute('data-li-org-post-id', postId);
+                return postId;
+            }
+        }
+    }
+
+    // Strategy 3: Use author + timestamp (very stable combination)
+    // Try multiple author selectors
+    const authorSelectors = [
+        '.update-components-actor__name',
+        '.update-components-actor__title',
+        '[data-control-name="actor"]',
+        '.feed-shared-actor__name',
+        '.feed-shared-actor__title',
+        'span.visually-hidden'
+    ];
+
+    let authorText = null;
+    for (const sel of authorSelectors) {
+        const authorEl = element.querySelector(sel);
+        if (authorEl && authorEl.textContent.trim()) {
+            authorText = authorEl.textContent.trim();
+            break;
+        }
+    }
+
+    // Try to find timestamp
+    const timeEl = element.querySelector('time');
+    let timeValue = null;
+    if (timeEl) {
+        timeValue = timeEl.getAttribute('datetime') || timeEl.textContent.trim();
+    }
+
+    // If we have BOTH author and time, create stable ID
+    if (authorText && timeValue) {
+        // Use only the author name and timestamp - very stable
+        const stableString = `${authorText}|${timeValue}`;
+        let hash = 0;
+        for (let i = 0; i < stableString.length; i++) {
+            const char = stableString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+        postId = 'author_time_' + Math.abs(hash).toString(36);
+        postIdCache.set(element, postId);
+        element.setAttribute('data-li-org-post-id', postId);
+        return postId;
+    }
+
+    // Strategy 4: If we have author but no time, use author + position
+    if (authorText) {
+        // Get first 50 chars of post content (more stable than 200)
+        const contentEl = element.querySelector('.feed-shared-update-v2__description, .update-components-text');
+        const contentText = contentEl ? contentEl.textContent.trim().substring(0, 50) : '';
+
+        const stableString = `${authorText}|${contentText}`;
+        let hash = 0;
+        for (let i = 0; i < stableString.length; i++) {
+            const char = stableString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        postId = 'author_content_' + Math.abs(hash).toString(36);
+        postIdCache.set(element, postId);
+        element.setAttribute('data-li-org-post-id', postId);
+        return postId;
+    }
+
+    // Last resort: Use first 100 chars of ALL text content (reduced from 200 for stability)
+    const allText = element.textContent.trim().substring(0, 100);
     let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+    for (let i = 0; i < allText.length; i++) {
+        const char = allText.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
         hash = hash & hash;
     }
     postId = 'text_' + Math.abs(hash).toString(36);
     postIdCache.set(element, postId);
     element.setAttribute('data-li-org-post-id', postId);
-    console.warn('⚠️ Using hash-based ID (text):', postId);
+
+    // Only log if not finding stable IDs (for debugging)
+    if (postId.startsWith('text_')) {
+        console.warn('⚠️ LinkedIn Organizer: Using text-based ID (least stable). Post may not filter correctly.');
+    }
+
     return postId;
 }
 
@@ -855,7 +907,17 @@ function setupPanelListeners() {
 }
 
 function findPosts() {
-    // Optimized: Try selectors in order of specificity, avoid expensive text content check
+    // Strategy 1: Look for elements with data-chameleon-result-urn (most reliable for saved posts)
+    const chameleonPosts = Array.from(document.querySelectorAll('[data-chameleon-result-urn]'))
+        .map(el => el.closest('li'))
+        .filter(li => li && li.offsetHeight > 100);
+
+    if (chameleonPosts.length > 0) {
+        // Remove duplicates
+        return Array.from(new Set(chameleonPosts));
+    }
+
+    // Strategy 2: Try traditional selectors
     const selectors = [
         'li.reusable-search__result-container',
         '.reusable-search__result-container',
@@ -1098,13 +1160,8 @@ async function filterByLabel(label) {
     const posts = findPosts();
 
     if (posts.length === 0) {
-        console.log('No posts found to filter');
         return;
     }
-
-    console.log(`🔍 Filtering ${posts.length} posts by label: "${label}"`);
-    console.log(`📊 Label data in storage:`, data.labels);
-    console.log(`📋 Posts with "${label}" label:`, Object.keys(data.labels).filter(id => data.labels[id].includes(label)));
 
     // CRITICAL FIX: Hide ALL posts immediately FIRST (synchronously)
     // This prevents labeled posts from being pushed down as more posts load
@@ -1116,12 +1173,6 @@ async function filterByLabel(label) {
         const postLabels = data.labels[postId] || [];
         const hasLabel = postLabels.includes(label);
 
-        // Debug logging for first 5 posts
-        const postIndex = posts.indexOf(post);
-        if (postIndex < 5) {
-            console.log(`Post ${postIndex}: ID="${postId}", Labels=[${postLabels.join(', ')}], Has "${label}"=${hasLabel}`);
-        }
-
         if (hasLabel) {
             // This post HAS the label - SHOW it by removing filter class
             post.classList.remove('li-org-filtered-out');
@@ -1129,9 +1180,9 @@ async function filterByLabel(label) {
         // If no label match, it stays hidden (already has filter class)
     }, `Filter by "${label}"`);
 
-    // Count visible posts after filtering
+    // Log summary only
     const visibleCount = posts.filter(p => !p.classList.contains('li-org-filtered-out')).length;
-    console.log(`✅ Filter complete: ${visibleCount} posts visible out of ${posts.length} total`);
+    console.log(`✅ Filtered by "${label}": ${visibleCount} of ${posts.length} posts visible`);
 }
 
 async function removeLabel(label) {
@@ -1159,8 +1210,6 @@ async function showAll() {
         return;
     }
 
-    console.log(`👁️ Showing all ${posts.length} posts`);
-
     await batchedFilter(posts, (post) => {
         post.classList.remove('li-org-filtered-out');
     }, 'Show all posts');
@@ -1174,24 +1223,25 @@ async function showPinnedOnly() {
     const posts = findPosts();
 
     if (posts.length === 0) {
-        console.log('No posts found to filter');
         return;
     }
-
-    console.log(`📌 Filtering ${posts.length} posts to show pinned only`);
 
     // Hide all posts immediately first
     posts.forEach(post => post.classList.add('li-org-filtered-out'));
 
     // Then reveal only pinned posts
+    let pinnedCount = 0;
     await batchedFilter(posts, (post) => {
         const postId = getPostId(post);
         const isPinned = data.pins.includes(postId);
 
         if (isPinned) {
             post.classList.remove('li-org-filtered-out');
+            pinnedCount++;
         }
     }, 'Show pinned posts');
+
+    console.log(`✅ Showing ${pinnedCount} pinned posts`);
 }
 
 async function searchPosts(query) {
@@ -1210,24 +1260,26 @@ async function searchPosts(query) {
     }
 
     if (posts.length === 0) {
-        console.log('No posts found to search');
         return;
     }
 
     const lowerQuery = query.toLowerCase();
-    console.log(`🔍 Searching ${posts.length} posts for: "${query}"`);
 
     // Hide all posts immediately first
     posts.forEach(post => post.classList.add('li-org-filtered-out'));
 
     // Then reveal only matching posts
+    let matchCount = 0;
     await batchedFilter(posts, (post) => {
         const matchesSearch = post.textContent.toLowerCase().includes(lowerQuery);
 
         if (matchesSearch) {
             post.classList.remove('li-org-filtered-out');
+            matchCount++;
         }
     }, `Search for "${query}"`);
+
+    console.log(`✅ Search "${query}": ${matchCount} matches found`);
 }
 
 async function exportData() {
