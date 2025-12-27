@@ -556,6 +556,11 @@ function hideLoadingIndicator() {
 
 // Optimized batched filtering with cancellation support
 async function batchedFilter(posts, filterFn, operationName = 'filter') {
+    // Only show loading indicator for operations that will take time
+    // Threshold: More than 100 posts
+    const SHOW_LOADING_THRESHOLD = 100;
+    const shouldShowLoading = posts.length > SHOW_LOADING_THRESHOLD;
+
     // Prevent concurrent filtering operations
     if (isFiltering) {
         console.log('⏸️ Filter already in progress, cancelling previous operation');
@@ -572,14 +577,16 @@ async function batchedFilter(posts, filterFn, operationName = 'filter') {
     const totalPosts = posts.length;
     let processed = 0;
 
-    showLoadingIndicator(`Processing ${totalPosts} posts...`);
+    if (shouldShowLoading) {
+        showLoadingIndicator(`Processing ${totalPosts} posts...`);
+    }
 
     return new Promise((resolve) => {
         function processBatch(startIndex) {
             // Check if operation was cancelled
             if (operation.cancelled) {
                 console.log(`🛑 ${operationName} cancelled`);
-                hideLoadingIndicator();
+                if (shouldShowLoading) hideLoadingIndicator();
                 resolve(false);
                 return;
             }
@@ -597,8 +604,11 @@ async function batchedFilter(posts, filterFn, operationName = 'filter') {
             });
 
             processed = endIndex;
-            const progress = Math.round((processed / totalPosts) * 100);
-            updateLoadingMessage(`Processing ${processed}/${totalPosts} posts (${progress}%)`);
+
+            if (shouldShowLoading) {
+                const progress = Math.round((processed / totalPosts) * 100);
+                updateLoadingMessage(`Processing ${processed}/${totalPosts} posts (${progress}%)`);
+            }
 
             // Continue with next batch or finish
             if (endIndex < totalPosts) {
@@ -606,7 +616,14 @@ async function batchedFilter(posts, filterFn, operationName = 'filter') {
                 requestAnimationFrame(() => processBatch(endIndex));
             } else {
                 // Finished
-                hideLoadingIndicator();
+                if (shouldShowLoading) {
+                    // Keep indicator visible for minimum 500ms so user can see it
+                    setTimeout(() => {
+                        hideLoadingIndicator();
+                    }, 500);
+                } else {
+                    isFiltering = false;
+                }
                 console.log(`✅ ${operationName} completed: ${totalPosts} posts processed`);
                 resolve(true);
             }
@@ -634,48 +651,116 @@ async function saveData(data) {
 }
 
 function getPostId(element) {
-    // Check cache first - massive performance improvement
+    // Check if element has a stored ID from when it was tagged
+    const storedId = element.getAttribute('data-li-org-post-id');
+    if (storedId) {
+        return storedId;
+    }
+
+    // Check cache second
     if (postIdCache.has(element)) {
-        return postIdCache.get(element);
+        const cachedId = postIdCache.get(element);
+        // Store in DOM for persistence across cache clears
+        element.setAttribute('data-li-org-post-id', cachedId);
+        return cachedId;
     }
 
     let postId;
 
-    // Try to get ID from post link (most reliable)
-    const link = element.querySelector('a[href*="/posts/"], a[href*="/feed/update/"]');
-    if (link && link.href) {
-        const match = link.href.match(/(?:posts|update)\/([^/?]+)/);
-        if (match) {
-            postId = match[1];
+    // Try to get ID from post link (most reliable) - look for ALL links and pick the best one
+    const links = element.querySelectorAll('a[href*="/posts/"], a[href*="/feed/update/"], a[href*="urn:li:activity:"]');
+    if (links.length > 0) {
+        // Priority: Direct post links > activity URNs > update links
+        for (const link of links) {
+            if (link.href && link.href.includes('/posts/')) {
+                const match = link.href.match(/\/posts\/([a-zA-Z0-9_-]+)/);
+                if (match && match[1]) {
+                    postId = 'post_' + match[1];
+                    break;
+                }
+            }
+        }
+
+        // Fallback to activity URN
+        if (!postId) {
+            for (const link of links) {
+                if (link.href && link.href.includes('urn:li:activity:')) {
+                    const match = link.href.match(/urn:li:activity:(\d+)/);
+                    if (match && match[1]) {
+                        postId = 'activity_' + match[1];
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Fallback to feed update
+        if (!postId) {
+            for (const link of links) {
+                if (link.href && link.href.includes('/feed/update/')) {
+                    const match = link.href.match(/\/feed\/update\/([^/?]+)/);
+                    if (match && match[1]) {
+                        postId = 'update_' + match[1];
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (postId) {
             postIdCache.set(element, postId);
+            element.setAttribute('data-li-org-post-id', postId);
+            console.log('✅ Found link-based ID:', postId);
             return postId;
         }
     }
 
-    // Fallback: generate ID from author + timestamp
-    const author = element.querySelector('.update-components-actor__name, [data-control-name="actor"]');
-    const time = element.querySelector('time');
-    if (author && time) {
-        const id = `${author.textContent.trim()}-${time.getAttribute('datetime') || time.textContent}`;
-        let hash = 0;
-        for (let i = 0; i < id.length; i++) {
-            hash = ((hash << 5) - hash) + id.charCodeAt(i);
-            hash = hash & hash;
+    // Fallback 2: Try data-urn attribute (more stable than links)
+    const urnElement = element.querySelector('[data-urn]');
+    if (urnElement) {
+        const urn = urnElement.getAttribute('data-urn');
+        const match = urn.match(/urn:li:\w+:(\d+)/);
+        if (match && match[1]) {
+            postId = 'urn_' + match[1];
+            postIdCache.set(element, postId);
+            element.setAttribute('data-li-org-post-id', postId);
+            console.log('✅ Found URN-based ID:', postId);
+            return postId;
         }
-        postId = Math.abs(hash).toString(36);
-        postIdCache.set(element, postId);
-        return postId;
     }
 
-    // Last resort: hash first 100 chars of text
-    const text = element.textContent.substring(0, 100);
+    // Fallback 3: generate stable ID from author + timestamp
+    const author = element.querySelector('.update-components-actor__name, [data-control-name="actor"], .update-components-actor__title');
+    const time = element.querySelector('time');
+    if (author && time) {
+        const authorText = author.textContent.trim();
+        const timeValue = time.getAttribute('datetime') || time.textContent.trim();
+        if (authorText && timeValue) {
+            const id = `${authorText}-${timeValue}`;
+            let hash = 0;
+            for (let i = 0; i < id.length; i++) {
+                hash = ((hash << 5) - hash) + id.charCodeAt(i);
+                hash = hash & hash;
+            }
+            postId = 'hash_' + Math.abs(hash).toString(36);
+            postIdCache.set(element, postId);
+            element.setAttribute('data-li-org-post-id', postId);
+            console.warn('⚠️ Using hash-based ID (author+time):', postId, 'for', authorText.substring(0, 30));
+            return postId;
+        }
+    }
+
+    // Last resort: hash first 200 chars of text (increased from 100 for better uniqueness)
+    const text = element.textContent.substring(0, 200);
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
         hash = ((hash << 5) - hash) + text.charCodeAt(i);
         hash = hash & hash;
     }
-    postId = Math.abs(hash).toString(36);
+    postId = 'text_' + Math.abs(hash).toString(36);
     postIdCache.set(element, postId);
+    element.setAttribute('data-li-org-post-id', postId);
+    console.warn('⚠️ Using hash-based ID (text):', postId);
     return postId;
 }
 
@@ -712,6 +797,7 @@ function createPanel() {
             <div class="organizer-section">
                 <button class="organizer-btn secondary" id="show-pinned">📌 Pinned</button>
                 <button class="organizer-btn secondary" id="export-data">💾 Backup Data</button>
+                <button class="organizer-btn secondary" id="clear-all-data" style="background:#dc3545!important;color:#fff!important;border-color:#dc3545!important;">🗑️ Clear All Data</button>
             </div>
         </div>
     `;
@@ -751,6 +837,7 @@ function setupPanelListeners() {
     searchInput.onkeydown = (e) => { if(e.key==='Escape') { searchInput.value=''; searchPosts(''); } };
     document.getElementById('show-pinned').onclick = showPinnedOnly;
     document.getElementById('export-data').onclick = exportData;
+    document.getElementById('clear-all-data').onclick = clearAllData;
     document.getElementById('create-label').onclick = async () => {
         const input = document.getElementById('new-label');
         const labelName = input.value.trim();
@@ -1016,17 +1103,35 @@ async function filterByLabel(label) {
     }
 
     console.log(`🔍 Filtering ${posts.length} posts by label: "${label}"`);
+    console.log(`📊 Label data in storage:`, data.labels);
+    console.log(`📋 Posts with "${label}" label:`, Object.keys(data.labels).filter(id => data.labels[id].includes(label)));
+
+    // First pass: remove all filter classes to reset
+    posts.forEach(post => post.classList.remove('li-org-filtered-out'));
 
     await batchedFilter(posts, (post) => {
         const postId = getPostId(post);
         const postLabels = data.labels[postId] || [];
+        const hasLabel = postLabels.includes(label);
 
-        if (postLabels.includes(label)) {
+        // Debug logging for first 5 posts
+        const postIndex = posts.indexOf(post);
+        if (postIndex < 5) {
+            console.log(`Post ${postIndex}: ID="${postId}", Labels=[${postLabels.join(', ')}], Has "${label}"=${hasLabel}`);
+        }
+
+        if (hasLabel) {
+            // This post HAS the label - SHOW it
             post.classList.remove('li-org-filtered-out');
         } else {
+            // This post does NOT have the label - HIDE it
             post.classList.add('li-org-filtered-out');
         }
     }, `Filter by "${label}"`);
+
+    // Count visible posts after filtering
+    const visibleCount = posts.filter(p => !p.classList.contains('li-org-filtered-out')).length;
+    console.log(`✅ Filter complete: ${visibleCount} posts visible out of ${posts.length} total`);
 }
 
 async function removeLabel(label) {
@@ -1131,6 +1236,78 @@ async function exportData() {
     a.download = `linkedin-posts-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+async function clearAllData() {
+    const confirmed = confirm(
+        '⚠️ WARNING: This will delete ALL your data!\n\n' +
+        'This will permanently remove:\n' +
+        '• All labels\n' +
+        '• All pinned posts\n' +
+        '• All notes\n' +
+        '• All label assignments\n\n' +
+        'This action cannot be undone!\n\n' +
+        'Are you sure you want to continue?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    // Double confirmation for safety
+    const doubleConfirm = confirm(
+        '⚠️ FINAL WARNING!\n\n' +
+        'Click OK to DELETE ALL DATA permanently.\n' +
+        'Click Cancel to keep your data.'
+    );
+
+    if (!doubleConfirm) {
+        return;
+    }
+
+    try {
+        // Clear all data
+        const emptyData = { labels: {}, pins: [], notes: {}, availableLabels: [] };
+        await saveData(emptyData);
+
+        // Clear cache
+        postIdCache = new WeakMap();
+
+        // Remove all visual labels from posts
+        findPosts().forEach(post => {
+            const oldLabels = post.querySelector('.li-org-post-labels');
+            const oldNote = post.querySelector('.li-org-post-note');
+            const controls = post.querySelector('.li-org-post-controls');
+
+            if (oldLabels) oldLabels.remove();
+            if (oldNote) oldNote.remove();
+            if (controls) {
+                const pinBtn = controls.querySelector('.pin-btn');
+                if (pinBtn) {
+                    pinBtn.classList.remove('pinned');
+                    pinBtn.title = 'Pin';
+                }
+            }
+
+            // Remove filter class
+            post.classList.remove('li-org-filtered-out');
+
+            // Remove stored post ID to force fresh ID generation
+            post.removeAttribute('data-li-org-post-id');
+        });
+
+        // Reset UI
+        activeFilter = null;
+        await updateLabelFilter();
+
+        // Show success message
+        alert('✅ All data has been cleared successfully!\n\nYou can start fresh now.');
+
+        console.log('🗑️ All extension data cleared');
+    } catch (error) {
+        console.error('Error clearing data:', error);
+        alert('❌ Error clearing data. Please try again or reload the page.');
+    }
 }
 
 function isOnSavedPostsPage() {
