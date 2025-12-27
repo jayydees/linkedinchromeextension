@@ -1411,35 +1411,68 @@ async function init() {
             console.log(`✅ LinkedIn Organizer: Found ${posts.length} posts after ${attempts} attempts`);
             clearInterval(checkInterval);
 
-            for (const post of posts) await addPostControls(post);
+            // Track which posts we've processed to avoid re-filtering
+            const processedPosts = new WeakSet();
+
+            for (const post of posts) {
+                await addPostControls(post);
+                processedPosts.add(post); // Mark initial posts as processed
+            }
             await updateLabelFilter();
 
             // Handle new posts appearing (e.g., from infinite scroll)
             let debouncedHandler;
+
             const observer = new MutationObserver(() => {
-                const newPosts = findPosts();
+                const allPosts = findPosts();
                 const searchInput = document.getElementById('search-input');
+
+                // Find truly NEW posts (not yet processed)
+                const newPosts = allPosts.filter(post => !processedPosts.has(post));
+
+                if (newPosts.length === 0) return; // No new posts, skip processing
 
                 // CRITICAL: Immediately hide new posts if a filter is active
                 // This prevents flickering while LinkedIn loads more posts
                 if (activeFilter || (searchInput && searchInput.value.trim())) {
                     newPosts.forEach(post => {
-                        if (!post.querySelector('.li-org-post-controls')) {
-                            post.classList.add('li-org-filtered-out');
-                        }
+                        post.classList.add('li-org-filtered-out');
+                        processedPosts.add(post); // Mark as processed
                     });
+                } else {
+                    // No filter active, just mark as processed
+                    newPosts.forEach(post => processedPosts.add(post));
                 }
 
-                // Debounce the expensive operations (adding controls, re-filtering)
+                // Debounce the expensive operations (adding controls, checking filter)
                 clearTimeout(debouncedHandler);
                 debouncedHandler = setTimeout(async () => {
                     for (const post of newPosts) {
-                        if (!post.querySelector('.li-org-post-controls')) await addPostControls(post);
+                        if (!post.querySelector('.li-org-post-controls')) {
+                            await addPostControls(post);
+
+                            // Check if this post should be visible based on current filter
+                            if (activeFilter) {
+                                const postId = getPostId(post);
+                                const postLabels = currentData.labels[postId] || [];
+                                const hasLabel = postLabels.includes(activeFilter);
+
+                                if (hasLabel) {
+                                    post.classList.remove('li-org-filtered-out');
+                                }
+                                // else: stays hidden (already has filter class)
+                            } else if (searchInput && searchInput.value.trim()) {
+                                const query = searchInput.value.toLowerCase();
+                                if (post.textContent.toLowerCase().includes(query)) {
+                                    post.classList.remove('li-org-filtered-out');
+                                }
+                            } else {
+                                // No filter, show the post
+                                post.classList.remove('li-org-filtered-out');
+                            }
+                        }
                     }
-                    if (searchInput && searchInput.value.trim()) searchPosts(searchInput.value);
-                    else if (activeFilter === 'pinned') showPinnedOnly();
-                    else if (activeFilter) filterByLabel(activeFilter);
-                }, 300);
+                }, 500); // Increased from 300ms to 500ms for better stability
             });
 
             const main = document.querySelector('main') || document.body;
