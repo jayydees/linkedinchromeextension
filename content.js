@@ -667,7 +667,22 @@ function getPostId(element) {
 
     let postId;
 
-    // Strategy 1: Try data-urn attribute (MOST stable for saved posts)
+    // Strategy 1: Try data-chameleon-result-urn (MOST stable for saved posts)
+    const chameleonUrn = element.querySelector('[data-chameleon-result-urn]');
+    if (chameleonUrn) {
+        const urn = chameleonUrn.getAttribute('data-chameleon-result-urn');
+        if (urn) {
+            const match = urn.match(/urn:li:activity:(\d+)/);
+            if (match && match[1]) {
+                postId = 'urn_activity_' + match[1];
+                postIdCache.set(element, postId);
+                element.setAttribute('data-li-org-post-id', postId);
+                return postId;
+            }
+        }
+    }
+
+    // Strategy 1b: Try other data-urn attributes (fallback)
     const urnElements = element.querySelectorAll('[data-urn]');
     for (const urnEl of urnElements) {
         const urn = urnEl.getAttribute('data-urn');
@@ -892,7 +907,17 @@ function setupPanelListeners() {
 }
 
 function findPosts() {
-    // Optimized: Try selectors in order of specificity, avoid expensive text content check
+    // Strategy 1: Look for elements with data-chameleon-result-urn (most reliable for saved posts)
+    const chameleonPosts = Array.from(document.querySelectorAll('[data-chameleon-result-urn]'))
+        .map(el => el.closest('li'))
+        .filter(li => li && li.offsetHeight > 100);
+
+    if (chameleonPosts.length > 0) {
+        // Remove duplicates
+        return Array.from(new Set(chameleonPosts));
+    }
+
+    // Strategy 2: Try traditional selectors
     const selectors = [
         'li.reusable-search__result-container',
         '.reusable-search__result-container',
