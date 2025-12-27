@@ -1106,9 +1106,11 @@ async function filterByLabel(label) {
     console.log(`📊 Label data in storage:`, data.labels);
     console.log(`📋 Posts with "${label}" label:`, Object.keys(data.labels).filter(id => data.labels[id].includes(label)));
 
-    // First pass: remove all filter classes to reset
-    posts.forEach(post => post.classList.remove('li-org-filtered-out'));
+    // CRITICAL FIX: Hide ALL posts immediately FIRST (synchronously)
+    // This prevents labeled posts from being pushed down as more posts load
+    posts.forEach(post => post.classList.add('li-org-filtered-out'));
 
+    // Then reveal only matching posts in batches
     await batchedFilter(posts, (post) => {
         const postId = getPostId(post);
         const postLabels = data.labels[postId] || [];
@@ -1121,12 +1123,10 @@ async function filterByLabel(label) {
         }
 
         if (hasLabel) {
-            // This post HAS the label - SHOW it
+            // This post HAS the label - SHOW it by removing filter class
             post.classList.remove('li-org-filtered-out');
-        } else {
-            // This post does NOT have the label - HIDE it
-            post.classList.add('li-org-filtered-out');
         }
+        // If no label match, it stays hidden (already has filter class)
     }, `Filter by "${label}"`);
 
     // Count visible posts after filtering
@@ -1180,14 +1180,16 @@ async function showPinnedOnly() {
 
     console.log(`📌 Filtering ${posts.length} posts to show pinned only`);
 
+    // Hide all posts immediately first
+    posts.forEach(post => post.classList.add('li-org-filtered-out'));
+
+    // Then reveal only pinned posts
     await batchedFilter(posts, (post) => {
         const postId = getPostId(post);
         const isPinned = data.pins.includes(postId);
 
         if (isPinned) {
             post.classList.remove('li-org-filtered-out');
-        } else {
-            post.classList.add('li-org-filtered-out');
         }
     }, 'Show pinned posts');
 }
@@ -1215,13 +1217,15 @@ async function searchPosts(query) {
     const lowerQuery = query.toLowerCase();
     console.log(`🔍 Searching ${posts.length} posts for: "${query}"`);
 
+    // Hide all posts immediately first
+    posts.forEach(post => post.classList.add('li-org-filtered-out'));
+
+    // Then reveal only matching posts
     await batchedFilter(posts, (post) => {
         const matchesSearch = post.textContent.toLowerCase().includes(lowerQuery);
 
         if (matchesSearch) {
             post.classList.remove('li-org-filtered-out');
-        } else {
-            post.classList.add('li-org-filtered-out');
         }
     }, `Search for "${query}"`);
 }
