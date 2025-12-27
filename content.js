@@ -1414,16 +1414,33 @@ async function init() {
             for (const post of posts) await addPostControls(post);
             await updateLabelFilter();
 
-            const observer = new MutationObserver(debounce(async () => {
+            // Handle new posts appearing (e.g., from infinite scroll)
+            let debouncedHandler;
+            const observer = new MutationObserver(() => {
                 const newPosts = findPosts();
                 const searchInput = document.getElementById('search-input');
-                for (const post of newPosts) {
-                    if (!post.querySelector('.li-org-post-controls')) await addPostControls(post);
+
+                // CRITICAL: Immediately hide new posts if a filter is active
+                // This prevents flickering while LinkedIn loads more posts
+                if (activeFilter || (searchInput && searchInput.value.trim())) {
+                    newPosts.forEach(post => {
+                        if (!post.querySelector('.li-org-post-controls')) {
+                            post.classList.add('li-org-filtered-out');
+                        }
+                    });
                 }
-                if (searchInput && searchInput.value.trim()) searchPosts(searchInput.value);
-                else if (activeFilter === 'pinned') showPinnedOnly();
-                else if (activeFilter) filterByLabel(activeFilter);
-            }, 300));
+
+                // Debounce the expensive operations (adding controls, re-filtering)
+                clearTimeout(debouncedHandler);
+                debouncedHandler = setTimeout(async () => {
+                    for (const post of newPosts) {
+                        if (!post.querySelector('.li-org-post-controls')) await addPostControls(post);
+                    }
+                    if (searchInput && searchInput.value.trim()) searchPosts(searchInput.value);
+                    else if (activeFilter === 'pinned') showPinnedOnly();
+                    else if (activeFilter) filterByLabel(activeFilter);
+                }, 300);
+            });
 
             const main = document.querySelector('main') || document.body;
             observer.observe(main, { childList: true, subtree: true });
