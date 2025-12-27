@@ -425,8 +425,8 @@ function injectStyles() {
             color: #004182 !important;
         }
 
-        /* Performance optimization - hide filtered posts with class */
-        .li-org-filtered-out {
+        /* Performance optimization - hide filtered posts with data attribute (browser-native, instant) */
+        li[data-li-org-visible="false"] {
             display: none !important;
         }
 
@@ -1163,25 +1163,17 @@ async function filterByLabel(label) {
         return;
     }
 
-    // CRITICAL FIX: Hide ALL posts immediately FIRST (synchronously)
-    // This prevents labeled posts from being pushed down as more posts load
-    posts.forEach(post => post.classList.add('li-org-filtered-out'));
-
-    // Then reveal only matching posts in batches
-    await batchedFilter(posts, (post) => {
+    // Mark all posts with visibility attribute - browser handles hiding instantly
+    posts.forEach(post => {
         const postId = getPostId(post);
         const postLabels = data.labels[postId] || [];
         const hasLabel = postLabels.includes(label);
 
-        if (hasLabel) {
-            // This post HAS the label - SHOW it by removing filter class
-            post.classList.remove('li-org-filtered-out');
-        }
-        // If no label match, it stays hidden (already has filter class)
-    }, `Filter by "${label}"`);
+        // Set data attribute - CSS will hide/show instantly (no flickering)
+        post.setAttribute('data-li-org-visible', hasLabel ? 'true' : 'false');
+    });
 
-    // Log summary only
-    const visibleCount = posts.filter(p => !p.classList.contains('li-org-filtered-out')).length;
+    const visibleCount = posts.filter(p => p.getAttribute('data-li-org-visible') === 'true').length;
     console.log(`✅ Filtered by "${label}": ${visibleCount} of ${posts.length} posts visible`);
 }
 
@@ -1210,9 +1202,8 @@ async function showAll() {
         return;
     }
 
-    await batchedFilter(posts, (post) => {
-        post.classList.remove('li-org-filtered-out');
-    }, 'Show all posts');
+    // Show all posts instantly
+    posts.forEach(post => post.setAttribute('data-li-org-visible', 'true'));
 
     updateLabelFilter();
 }
@@ -1226,20 +1217,15 @@ async function showPinnedOnly() {
         return;
     }
 
-    // Hide all posts immediately first
-    posts.forEach(post => post.classList.add('li-org-filtered-out'));
-
-    // Then reveal only pinned posts
+    // Mark posts with visibility attribute instantly
     let pinnedCount = 0;
-    await batchedFilter(posts, (post) => {
+    posts.forEach(post => {
         const postId = getPostId(post);
         const isPinned = data.pins.includes(postId);
 
-        if (isPinned) {
-            post.classList.remove('li-org-filtered-out');
-            pinnedCount++;
-        }
-    }, 'Show pinned posts');
+        post.setAttribute('data-li-org-visible', isPinned ? 'true' : 'false');
+        if (isPinned) pinnedCount++;
+    });
 
     console.log(`✅ Showing ${pinnedCount} pinned posts`);
 }
@@ -1265,19 +1251,14 @@ async function searchPosts(query) {
 
     const lowerQuery = query.toLowerCase();
 
-    // Hide all posts immediately first
-    posts.forEach(post => post.classList.add('li-org-filtered-out'));
-
-    // Then reveal only matching posts
+    // Mark posts with visibility attribute instantly
     let matchCount = 0;
-    await batchedFilter(posts, (post) => {
+    posts.forEach(post => {
         const matchesSearch = post.textContent.toLowerCase().includes(lowerQuery);
 
-        if (matchesSearch) {
-            post.classList.remove('li-org-filtered-out');
-            matchCount++;
-        }
-    }, `Search for "${query}"`);
+        post.setAttribute('data-li-org-visible', matchesSearch ? 'true' : 'false');
+        if (matchesSearch) matchCount++;
+    });
 
     console.log(`✅ Search "${query}": ${matchCount} matches found`);
 }
@@ -1345,8 +1326,8 @@ async function clearAllData() {
                 }
             }
 
-            // Remove filter class
-            post.classList.remove('li-org-filtered-out');
+            // Reset visibility
+            post.setAttribute('data-li-org-visible', 'true');
 
             // Remove stored post ID to force fresh ID generation
             post.removeAttribute('data-li-org-post-id');
@@ -1411,36 +1392,57 @@ async function init() {
             console.log(`✅ LinkedIn Organizer: Found ${posts.length} posts after ${attempts} attempts`);
             clearInterval(checkInterval);
 
-            for (const post of posts) await addPostControls(post);
+            // Track which posts we've processed
+            const processedPosts = new WeakSet();
+
+            for (const post of posts) {
+                await addPostControls(post);
+                post.setAttribute('data-li-org-visible', 'true'); // All posts visible initially
+                processedPosts.add(post);
+            }
             await updateLabelFilter();
 
-            // Handle new posts appearing (e.g., from infinite scroll)
-            let debouncedHandler;
-            const observer = new MutationObserver(() => {
-                const newPosts = findPosts();
-                const searchInput = document.getElementById('search-input');
+            // Handle new posts from infinite scroll - simple and fast
+            const observer = new MutationObserver(debounce(() => {
+                const allPosts = findPosts();
+                const newPosts = allPosts.filter(post => !processedPosts.has(post));
 
-                // CRITICAL: Immediately hide new posts if a filter is active
-                // This prevents flickering while LinkedIn loads more posts
-                if (activeFilter || (searchInput && searchInput.value.trim())) {
-                    newPosts.forEach(post => {
-                        if (!post.querySelector('.li-org-post-controls')) {
-                            post.classList.add('li-org-filtered-out');
-                        }
-                    });
-                }
+                if (newPosts.length === 0) return;
 
-                // Debounce the expensive operations (adding controls, re-filtering)
-                clearTimeout(debouncedHandler);
-                debouncedHandler = setTimeout(async () => {
-                    for (const post of newPosts) {
-                        if (!post.querySelector('.li-org-post-controls')) await addPostControls(post);
+                // Process new posts
+                newPosts.forEach(async (post) => {
+                    processedPosts.add(post);
+
+                    // Add controls if needed
+                    if (!post.querySelector('.li-org-post-controls')) {
+                        await addPostControls(post);
                     }
-                    if (searchInput && searchInput.value.trim()) searchPosts(searchInput.value);
-                    else if (activeFilter === 'pinned') showPinnedOnly();
-                    else if (activeFilter) filterByLabel(activeFilter);
-                }, 300);
-            });
+
+                    // Apply current filter state to new post
+                    const searchInput = document.getElementById('search-input');
+
+                    if (activeFilter && activeFilter !== 'pinned') {
+                        // Label filter active
+                        const postId = getPostId(post);
+                        const postLabels = currentData.labels[postId] || [];
+                        const hasLabel = postLabels.includes(activeFilter);
+                        post.setAttribute('data-li-org-visible', hasLabel ? 'true' : 'false');
+                    } else if (activeFilter === 'pinned') {
+                        // Pinned filter active
+                        const postId = getPostId(post);
+                        const isPinned = currentData.pins.includes(postId);
+                        post.setAttribute('data-li-org-visible', isPinned ? 'true' : 'false');
+                    } else if (searchInput && searchInput.value.trim()) {
+                        // Search active
+                        const query = searchInput.value.toLowerCase();
+                        const matches = post.textContent.toLowerCase().includes(query);
+                        post.setAttribute('data-li-org-visible', matches ? 'true' : 'false');
+                    } else {
+                        // No filter - show post
+                        post.setAttribute('data-li-org-visible', 'true');
+                    }
+                });
+            }, 300));
 
             const main = document.querySelector('main') || document.body;
             observer.observe(main, { childList: true, subtree: true });
