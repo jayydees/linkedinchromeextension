@@ -1156,47 +1156,10 @@ async function toggleFilter(label) {
 }
 
 async function filterByLabel(label) {
-    // Scroll to top to ensure we start filtering from the beginning
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-
-    // Wait a moment for LinkedIn to load initial posts
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const data = currentData;
-    const posts = findPosts();
-
-    if (posts.length === 0) {
-        alert('⚠️ No posts found.\n\nThe page might still be loading. Please wait a moment and try again.');
-        activeFilter = null;
-        updateLabelFilter();
-        return;
-    }
-
-    // Mark all posts with visibility attribute - browser handles hiding instantly
-    posts.forEach(post => {
-        const postId = getPostId(post);
-        const postLabels = data.labels[postId] || [];
-        const hasLabel = postLabels.includes(label);
-
-        // Set data attribute - CSS will hide/show instantly (no flickering)
-        post.setAttribute('data-li-org-visible', hasLabel ? 'true' : 'false');
-    });
-
-    const visibleCount = posts.filter(p => p.getAttribute('data-li-org-visible') === 'true').length;
-    console.log(`✅ Filtered by "${label}": ${visibleCount} of ${posts.length} posts visible`);
-
-    // Show helpful message if no results
-    if (visibleCount === 0) {
-        const totalLabeled = Object.keys(data.labels).filter(id => data.labels[id].includes(label)).length;
-        if (totalLabeled > 0) {
-            alert(`ℹ️ No posts with "${label}" found on screen.\n\nYou have ${totalLabeled} post(s) tagged with this label, but they're not loaded yet.\n\nTry scrolling down to load more posts, then click the filter again.`);
-        } else {
-            alert(`ℹ️ No posts tagged with "${label}".\n\nTag some posts first by clicking the 🏷️ button on any post.`);
-        }
-        // Unfilter if no results
-        activeFilter = null;
-        await showAll();
-    }
+    // Refresh page to reset to original post order and load from beginning
+    // Store filter in sessionStorage so we can apply it after refresh
+    sessionStorage.setItem('li-org-pending-filter', label);
+    location.reload();
 }
 
 async function removeLabel(label) {
@@ -1218,6 +1181,10 @@ async function removeLabel(label) {
 
 async function showAll() {
     activeFilter = null;
+
+    // Clear any pending filter from sessionStorage
+    sessionStorage.removeItem('li-org-pending-filter');
+
     const posts = findPosts();
 
     if (posts.length === 0) {
@@ -1423,6 +1390,25 @@ async function init() {
                 processedPosts.add(post);
             }
             await updateLabelFilter();
+
+            // Check if there's a pending filter from before page refresh
+            const pendingFilter = sessionStorage.getItem('li-org-pending-filter');
+            if (pendingFilter) {
+                sessionStorage.removeItem('li-org-pending-filter');
+                activeFilter = pendingFilter;
+
+                // Apply filter to loaded posts
+                const data = currentData;
+                posts.forEach(post => {
+                    const postId = getPostId(post);
+                    const postLabels = data.labels[postId] || [];
+                    const hasLabel = postLabels.includes(pendingFilter);
+                    post.setAttribute('data-li-org-visible', hasLabel ? 'true' : 'false');
+                });
+
+                await updateLabelFilter();
+                console.log(`✅ Applied pending filter: "${pendingFilter}"`);
+            }
 
             // Handle new posts from infinite scroll - simple and fast
             const observer = new MutationObserver(debounce(async () => {
