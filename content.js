@@ -556,6 +556,11 @@ function hideLoadingIndicator() {
 
 // Optimized batched filtering with cancellation support
 async function batchedFilter(posts, filterFn, operationName = 'filter') {
+    // Only show loading indicator for operations that will take time
+    // Threshold: More than 100 posts
+    const SHOW_LOADING_THRESHOLD = 100;
+    const shouldShowLoading = posts.length > SHOW_LOADING_THRESHOLD;
+
     // Prevent concurrent filtering operations
     if (isFiltering) {
         console.log('⏸️ Filter already in progress, cancelling previous operation');
@@ -572,14 +577,16 @@ async function batchedFilter(posts, filterFn, operationName = 'filter') {
     const totalPosts = posts.length;
     let processed = 0;
 
-    showLoadingIndicator(`Processing ${totalPosts} posts...`);
+    if (shouldShowLoading) {
+        showLoadingIndicator(`Processing ${totalPosts} posts...`);
+    }
 
     return new Promise((resolve) => {
         function processBatch(startIndex) {
             // Check if operation was cancelled
             if (operation.cancelled) {
                 console.log(`🛑 ${operationName} cancelled`);
-                hideLoadingIndicator();
+                if (shouldShowLoading) hideLoadingIndicator();
                 resolve(false);
                 return;
             }
@@ -597,8 +604,11 @@ async function batchedFilter(posts, filterFn, operationName = 'filter') {
             });
 
             processed = endIndex;
-            const progress = Math.round((processed / totalPosts) * 100);
-            updateLoadingMessage(`Processing ${processed}/${totalPosts} posts (${progress}%)`);
+
+            if (shouldShowLoading) {
+                const progress = Math.round((processed / totalPosts) * 100);
+                updateLoadingMessage(`Processing ${processed}/${totalPosts} posts (${progress}%)`);
+            }
 
             // Continue with next batch or finish
             if (endIndex < totalPosts) {
@@ -606,7 +616,14 @@ async function batchedFilter(posts, filterFn, operationName = 'filter') {
                 requestAnimationFrame(() => processBatch(endIndex));
             } else {
                 // Finished
-                hideLoadingIndicator();
+                if (shouldShowLoading) {
+                    // Keep indicator visible for minimum 500ms so user can see it
+                    setTimeout(() => {
+                        hideLoadingIndicator();
+                    }, 500);
+                } else {
+                    isFiltering = false;
+                }
                 console.log(`✅ ${operationName} completed: ${totalPosts} posts processed`);
                 resolve(true);
             }
@@ -712,6 +729,7 @@ function createPanel() {
             <div class="organizer-section">
                 <button class="organizer-btn secondary" id="show-pinned">📌 Pinned</button>
                 <button class="organizer-btn secondary" id="export-data">💾 Backup Data</button>
+                <button class="organizer-btn secondary" id="clear-all-data" style="background:#dc3545!important;color:#fff!important;border-color:#dc3545!important;">🗑️ Clear All Data</button>
             </div>
         </div>
     `;
@@ -751,6 +769,7 @@ function setupPanelListeners() {
     searchInput.onkeydown = (e) => { if(e.key==='Escape') { searchInput.value=''; searchPosts(''); } };
     document.getElementById('show-pinned').onclick = showPinnedOnly;
     document.getElementById('export-data').onclick = exportData;
+    document.getElementById('clear-all-data').onclick = clearAllData;
     document.getElementById('create-label').onclick = async () => {
         const input = document.getElementById('new-label');
         const labelName = input.value.trim();
@@ -1131,6 +1150,75 @@ async function exportData() {
     a.download = `linkedin-posts-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+async function clearAllData() {
+    const confirmed = confirm(
+        '⚠️ WARNING: This will delete ALL your data!\n\n' +
+        'This will permanently remove:\n' +
+        '• All labels\n' +
+        '• All pinned posts\n' +
+        '• All notes\n' +
+        '• All label assignments\n\n' +
+        'This action cannot be undone!\n\n' +
+        'Are you sure you want to continue?'
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    // Double confirmation for safety
+    const doubleConfirm = confirm(
+        '⚠️ FINAL WARNING!\n\n' +
+        'Click OK to DELETE ALL DATA permanently.\n' +
+        'Click Cancel to keep your data.'
+    );
+
+    if (!doubleConfirm) {
+        return;
+    }
+
+    try {
+        // Clear all data
+        const emptyData = { labels: {}, pins: [], notes: {}, availableLabels: [] };
+        await saveData(emptyData);
+
+        // Clear cache
+        postIdCache = new WeakMap();
+
+        // Remove all visual labels from posts
+        findPosts().forEach(post => {
+            const oldLabels = post.querySelector('.li-org-post-labels');
+            const oldNote = post.querySelector('.li-org-post-note');
+            const controls = post.querySelector('.li-org-post-controls');
+
+            if (oldLabels) oldLabels.remove();
+            if (oldNote) oldNote.remove();
+            if (controls) {
+                const pinBtn = controls.querySelector('.pin-btn');
+                if (pinBtn) {
+                    pinBtn.classList.remove('pinned');
+                    pinBtn.title = 'Pin';
+                }
+            }
+
+            // Remove filter class
+            post.classList.remove('li-org-filtered-out');
+        });
+
+        // Reset UI
+        activeFilter = null;
+        await updateLabelFilter();
+
+        // Show success message
+        alert('✅ All data has been cleared successfully!\n\nYou can start fresh now.');
+
+        console.log('🗑️ All extension data cleared');
+    } catch (error) {
+        console.error('Error clearing data:', error);
+        alert('❌ Error clearing data. Please try again or reload the page.');
+    }
 }
 
 function isOnSavedPostsPage() {
