@@ -1403,14 +1403,14 @@ async function init() {
             await updateLabelFilter();
 
             // Handle new posts from infinite scroll - simple and fast
-            const observer = new MutationObserver(debounce(() => {
+            const observer = new MutationObserver(debounce(async () => {
                 const allPosts = findPosts();
                 const newPosts = allPosts.filter(post => !processedPosts.has(post));
 
                 if (newPosts.length === 0) return;
 
-                // Process new posts
-                newPosts.forEach(async (post) => {
+                // Process new posts sequentially (await properly)
+                for (const post of newPosts) {
                     processedPosts.add(post);
 
                     // Add controls if needed
@@ -1441,7 +1441,7 @@ async function init() {
                         // No filter - show post
                         post.setAttribute('data-li-org-visible', 'true');
                     }
-                });
+                }
             }, 300));
 
             const main = document.querySelector('main') || document.body;
